@@ -1,22 +1,42 @@
 import cv2
 import mediapipe as mp
 import json
+import numpy as np
+
+def preprocess_frame(frame):
+    # Giảm nhiễu
+    denoised = cv2.fastNlMeansDenoisingColored(frame, None, 10, 10, 7, 21)
+    
+    # Chuyển sang YUV để cân bằng sáng
+    yuv = cv2.cvtColor(denoised, cv2.COLOR_BGR2YUV)
+    y, u, v = cv2.split(yuv)
+
+    # Cân bằng histogram (sáng)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    y_eq = clahe.apply(y)
+
+    yuv_eq = cv2.merge((y_eq, u, v))
+    enhanced = cv2.cvtColor(yuv_eq, cv2.COLOR_YUV2BGR)
+    
+    return enhanced
 
 def extract_hand_landmarks(video_path, output_json='hand_landmarks.json'):
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.5)
-    mp_drawing = mp.solutions.drawing_utils
-
+    
     cap = cv2.VideoCapture(video_path)
     landmarks_data = []
-
     frame_idx = 0
+
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
 
-        # Convert the BGR image to RGB
+        # Tiền xử lý khung hình
+        frame = preprocess_frame(frame)
+
+        # Đổi BGR sang RGB
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = hands.process(image)
 
@@ -38,7 +58,6 @@ def extract_hand_landmarks(video_path, output_json='hand_landmarks.json'):
 
     cap.release()
 
-    # Save to JSON
     with open(output_json, 'w') as f:
         json.dump(landmarks_data, f, indent=2)
 
